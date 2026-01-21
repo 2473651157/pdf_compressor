@@ -1,7 +1,7 @@
 """图片压缩服务"""
 from enum import Enum
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageOps
 from typing import Tuple, Optional
 
 
@@ -12,22 +12,25 @@ class CompressionLevel(str, Enum):
     BASIC = "basic"      # 基础压缩
 
 
-# 压缩参数配置
+# 压缩参数配置 - 调整为更合理的参数以减少失真
 COMPRESSION_SETTINGS = {
     CompressionLevel.EXTREME: {
-        "quality": 35,
-        "max_width": 600,
-        "max_height": 800,
+        "quality": 45,           # 提高质量避免严重失真
+        "max_width": 1024,       # 提高分辨率
+        "max_height": 1024,
+        "subsampling": 1,        # 4:2:2 色度子采样
     },
     CompressionLevel.MEDIUM: {
-        "quality": 65,
-        "max_width": 1000,
-        "max_height": 1400,
+        "quality": 70,
+        "max_width": 1600,
+        "max_height": 1600,
+        "subsampling": 2,        # 4:2:0 色度子采样
     },
     CompressionLevel.BASIC: {
         "quality": 85,
-        "max_width": 1600,
-        "max_height": 2200,
+        "max_width": 2400,
+        "max_height": 2400,
+        "subsampling": 0,        # 4:4:4 无子采样，最高质量
     },
 }
 
@@ -62,15 +65,29 @@ class ImageCompressor:
         # 打开图片
         img = Image.open(BytesIO(image_data))
         
+        # 处理EXIF方向信息，避免图片旋转
+        try:
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+        
         # 转换模式 (处理RGBA等)
-        if img.mode in ('RGBA', 'LA', 'P'):
+        if img.mode in ('RGBA', 'LA'):
             # 对于有透明通道的图片，转为RGB并填充白色背景
             background = Image.new('RGB', img.size, (255, 255, 255))
-            if img.mode == 'P':
-                img = img.convert('RGBA')
-            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+            background.paste(img, mask=img.split()[-1])
             img = background
-        elif img.mode != 'RGB':
+        elif img.mode == 'P':
+            # 调色板模式，先转RGBA再处理透明
+            img_rgba = img.convert('RGBA')
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img_rgba, mask=img_rgba.split()[-1])
+            img = background
+        elif img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        
+        # 灰度图转RGB
+        if img.mode == 'L':
             img = img.convert('RGB')
         
         # 调整尺寸
@@ -86,7 +103,8 @@ class ImageCompressor:
             output, 
             format="JPEG", 
             quality=settings["quality"],
-            optimize=True
+            optimize=True,
+            subsampling=settings.get("subsampling", 2)
         )
         
         return output.getvalue(), "jpeg"
@@ -109,6 +127,10 @@ class ImageCompressor:
         
         new_width = int(width * ratio)
         new_height = int(height * ratio)
+        
+        # 确保尺寸至少为1
+        new_width = max(1, new_width)
+        new_height = max(1, new_height)
         
         # 使用高质量缩放
         return img.resize((new_width, new_height), Image.LANCZOS)

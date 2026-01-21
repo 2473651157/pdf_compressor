@@ -90,7 +90,8 @@ class PDFCompressor:
                             output_buffer, 
                             format="JPEG", 
                             quality=settings["quality"],
-                            optimize=True
+                            optimize=True,
+                            subsampling=settings.get("subsampling", 2)
                         )
                         compressed_data = output_buffer.getvalue()
                         
