@@ -142,10 +142,12 @@ class PDFCompressor:
         Returns:
             各级别输出文件信息
         """
+        import shutil
         from ..utils import get_output_filename, get_file_size, format_file_size
         
         results = {}
         output_dir = Path(output_dir)
+        original_size = get_file_size(Path(input_path))
         
         for level in CompressionLevel:
             output_name = get_output_filename(original_name, level.value)
@@ -159,6 +161,12 @@ class PDFCompressor:
             
             if success:
                 file_size = get_file_size(output_path)
+                
+                # 如果压缩后文件更大，使用原文件
+                if file_size >= original_size:
+                    shutil.copy2(input_path, output_path)
+                    file_size = original_size
+                
                 results[level.value] = {
                     "filename": output_name,
                     "path": str(output_path),
