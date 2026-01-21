@@ -12,25 +12,25 @@ class CompressionLevel(str, Enum):
     BASIC = "basic"      # 基础压缩
 
 
-# 压缩参数配置 - 调整为更合理的参数以减少失真
+# 压缩参数配置 - 三个级别差异明显
 COMPRESSION_SETTINGS = {
     CompressionLevel.EXTREME: {
-        "quality": 45,           # 提高质量避免严重失真
-        "max_width": 1024,       # 提高分辨率
-        "max_height": 1024,
-        "subsampling": 1,        # 4:2:2 色度子采样
+        "quality": 30,           # 低质量，最大压缩
+        "max_width": 800,        # 小尺寸
+        "max_height": 800,
+        "subsampling": 2,        # 4:2:0 最大子采样
     },
     CompressionLevel.MEDIUM: {
-        "quality": 70,
-        "max_width": 1600,
-        "max_height": 1600,
-        "subsampling": 2,        # 4:2:0 色度子采样
+        "quality": 55,           # 中等质量
+        "max_width": 1200,       # 中等尺寸
+        "max_height": 1200,
+        "subsampling": 1,        # 4:2:2 中等子采样
     },
     CompressionLevel.BASIC: {
-        "quality": 85,
-        "max_width": 2400,
-        "max_height": 2400,
-        "subsampling": 0,        # 4:4:4 无子采样，最高质量
+        "quality": 80,           # 高质量
+        "max_width": 9999,       # 不限制尺寸
+        "max_height": 9999,
+        "subsampling": 0,        # 4:4:4 无子采样
     },
 }
 
