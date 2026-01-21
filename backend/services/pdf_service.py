@@ -3,8 +3,9 @@ import fitz  # PyMuPDF
 from pathlib import Path
 from typing import Optional
 from io import BytesIO
+from PIL import Image
 
-from .image_service import ImageCompressor, CompressionLevel
+from .image_service import ImageCompressor, CompressionLevel, COMPRESSION_SETTINGS
 
 
 class PDFCompressor:
@@ -30,6 +31,7 @@ class PDFCompressor:
         try:
             # 打开PDF文档
             doc = fitz.open(input_path)
+            settings = COMPRESSION_SETTINGS[level]
             
             # 遍历所有页面
             for page_num in range(len(doc)):
@@ -38,7 +40,7 @@ class PDFCompressor:
                 # 获取页面中的所有图片
                 image_list = page.get_images(full=True)
                 
-                for img_index, img_info in enumerate(image_list):
+                for img_info in image_list:
                     xref = img_info[0]  # 图片的xref引用
                     
                     try:
@@ -48,35 +50,72 @@ class PDFCompressor:
                             continue
                         
                         image_bytes = base_image["image"]
-                        image_ext = base_image["ext"]
                         
                         # 跳过太小的图片(可能是图标等)
-                        if len(image_bytes) < 1024:  # 小于1KB
+                        if len(image_bytes) < 2048:  # 小于2KB
                             continue
                         
-                        # 压缩图片
-                        compressed_data, _ = ImageCompressor.compress_image(
-                            image_bytes, 
-                            level,
-                            image_ext
+                        # 使用PIL打开并压缩图片
+                        try:
+                            pil_image = Image.open(BytesIO(image_bytes))
+                        except Exception:
+                            continue
+                        
+                        # 转换颜色模式
+                        if pil_image.mode in ('RGBA', 'LA', 'P'):
+                            background = Image.new('RGB', pil_image.size, (255, 255, 255))
+                            if pil_image.mode == 'P':
+                                pil_image = pil_image.convert('RGBA')
+                            if pil_image.mode == 'RGBA':
+                                background.paste(pil_image, mask=pil_image.split()[-1])
+                            else:
+                                background.paste(pil_image)
+                            pil_image = background
+                        elif pil_image.mode != 'RGB':
+                            pil_image = pil_image.convert('RGB')
+                        
+                        # 调整尺寸
+                        orig_width, orig_height = pil_image.size
+                        max_width = settings["max_width"]
+                        max_height = settings["max_height"]
+                        
+                        if orig_width > max_width or orig_height > max_height:
+                            ratio = min(max_width / orig_width, max_height / orig_height)
+                            new_size = (int(orig_width * ratio), int(orig_height * ratio))
+                            pil_image = pil_image.resize(new_size, Image.LANCZOS)
+                        
+                        # 压缩为JPEG
+                        output_buffer = BytesIO()
+                        pil_image.save(
+                            output_buffer, 
+                            format="JPEG", 
+                            quality=settings["quality"],
+                            optimize=True
                         )
+                        compressed_data = output_buffer.getvalue()
                         
                         # 只有当压缩后更小时才替换
-                        if len(compressed_data) < len(image_bytes):
-                            # 替换PDF中的图片
-                            doc.update_stream(xref, compressed_data)
+                        if len(compressed_data) < len(image_bytes) * 0.95:  # 至少减少5%
+                            # 使用replace_image替换图片 (PyMuPDF >= 1.21.0)
+                            try:
+                                page.replace_image(xref, stream=compressed_data)
+                            except AttributeError:
+                                # 旧版本PyMuPDF，使用其他方法
+                                doc._updateStream(xref, compressed_data)
                             
                     except Exception as e:
                         # 单个图片处理失败不影响整体
                         print(f"处理图片 {xref} 时出错: {e}")
                         continue
             
-            # 保存压缩后的PDF
+            # 保存压缩后的PDF，使用更激进的压缩选项
             doc.save(
                 output_path,
-                garbage=4,  # 清理未使用的对象
-                deflate=True,  # 压缩流
-                clean=True,  # 清理内容流
+                garbage=4,          # 最高级别垃圾回收
+                deflate=True,       # 压缩流
+                deflate_images=True,# 压缩图片流
+                deflate_fonts=True, # 压缩字体流
+                clean=True,         # 清理内容流
             )
             doc.close()
             
