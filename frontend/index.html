@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocPress - 智能文档压缩</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M12 18V12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M9 15L12 12L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="logo-text">DocPress</span>
+            </div>
+            <p class="tagline">智能压缩 · 保留品质</p>
+        </header>
+
+        <main class="main">
+            <!-- 上传区域 -->
+            <section class="upload-section" id="uploadSection">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M17 8L12 3L7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M12 3V15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <h2 class="upload-title">拖放文件到此处</h2>
+                    <p class="upload-subtitle">或点击选择文件</p>
+                    <div class="upload-formats">
+                        <span class="format-badge">PDF</span>
+                        <span class="format-badge">DOCX</span>
+                    </div>
+                    <p class="upload-limit">最大支持 50MB</p>
+                    <input type="file" id="fileInput" accept=".pdf,.docx" hidden>
+                </div>
+            </section>
+
+            <!-- 处理进度 -->
+            <section class="progress-section" id="progressSection" style="display: none;">
+                <div class="progress-card">
+                    <div class="file-info">
+                        <div class="file-icon" id="fileIcon">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" stroke-width="2"/>
+                                <path d="M14 2V8H20" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                        </div>
+                        <div class="file-details">
+                            <h3 class="file-name" id="fileName">document.pdf</h3>
+                            <p class="file-size" id="fileSize">2.5 MB</p>
+                        </div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <p class="progress-status" id="progressStatus">正在上传...</p>
+                </div>
+            </section>
+
+            <!-- 结果区域 -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <div class="results-header">
+                    <h2 class="results-title">压缩完成</h2>
+                    <div class="original-info">
+                        <span>原始文件:</span>
+                        <span id="originalName">document.pdf</span>
+                        <span class="original-size" id="originalSize">10.5 MB</span>
+                    </div>
+                </div>
+                
+                <div class="results-grid" id="resultsGrid">
+                    <!-- 动态生成结果卡片 -->
+                </div>
+
+                <button class="btn-new" id="btnNew">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    压缩新文件
+                </button>
+            </section>
+
+            <!-- 错误提示 -->
+            <section class="error-section" id="errorSection" style="display: none;">
+                <div class="error-card">
+                    <div class="error-icon">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                            <path d="M15 9L9 15M9 9L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="error-title">处理失败</h3>
+                    <p class="error-message" id="errorMessage">未知错误</p>
+                    <button class="btn-retry" id="btnRetry">重新上传</button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>支持 PDF、Word 文档压缩 · 三种压缩级别可选</p>
+        </footer>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
