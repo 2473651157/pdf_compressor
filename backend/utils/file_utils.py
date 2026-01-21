@@ -11,7 +11,7 @@ TEMP_DIR = BASE_DIR / "temp"
 
 # 允许的文件类型
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
 
 
 def ensure_temp_dir():
@@ -44,7 +44,7 @@ def validate_file(filename: str, file_size: int) -> Tuple[bool, str]:
         return False, f"不支持的文件类型: {ext}，仅支持 PDF 和 DOCX"
     
     if file_size > MAX_FILE_SIZE:
-        return False, f"文件过大: {file_size / 1024 / 1024:.1f}MB，最大支持 50MB"
+        return False, f"文件过大: {file_size / 1024 / 1024:.1f}MB，最大支持 200MB"
     
     return True, ""
 

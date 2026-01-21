@@ -92,9 +92,9 @@ async function handleFileUpload(file) {
         return;
     }
 
-    // 验证文件大小 (50MB)
-    if (file.size > 50 * 1024 * 1024) {
-        showError('文件过大，最大支持 50MB');
+    // 验证文件大小 (200MB)
+    if (file.size > 200 * 1024 * 1024) {
+        showError('文件过大，最大支持 200MB');
         return;
     }
 
