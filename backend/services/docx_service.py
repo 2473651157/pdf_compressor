@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Optional
 import re
 
-from .image_service import ImageCompressor, CompressionLevel
+from .image_service import ImageCompressor, CompressionLevel, COMPRESSION_SETTINGS
 
 
 class DOCXCompressor:
@@ -69,6 +69,11 @@ class DOCXCompressor:
         """
         压缩media目录中的所有图片
         """
+        from PIL import Image, ImageOps
+        from io import BytesIO
+        
+        settings = COMPRESSION_SETTINGS[level]
+        
         for filename in os.listdir(media_dir):
             file_path = os.path.join(media_dir, filename)
             ext = os.path.splitext(filename)[1].lower()
@@ -82,15 +87,64 @@ class DOCXCompressor:
                     image_data = f.read()
                 
                 # 跳过太小的图片
-                if len(image_data) < 1024:
+                if len(image_data) < 4096:  # 小于4KB
                     continue
                 
-                # 压缩图片
-                compressed_data, output_format = ImageCompressor.compress_image(
-                    image_data,
-                    level,
-                    ext[1:]  # 去掉点号
+                # 使用PIL处理图片
+                try:
+                    pil_image = Image.open(BytesIO(image_data))
+                except Exception:
+                    continue
+                
+                # 处理EXIF方向
+                try:
+                    pil_image = ImageOps.exif_transpose(pil_image)
+                except Exception:
+                    pass
+                
+                orig_width, orig_height = pil_image.size
+                
+                # 基础压缩：只压缩质量，不缩小尺寸
+                if level == CompressionLevel.BASIC:
+                    max_width = max(orig_width, settings["max_width"])
+                    max_height = max(orig_height, settings["max_height"])
+                else:
+                    max_width = settings["max_width"]
+                    max_height = settings["max_height"]
+                
+                # 转换颜色模式
+                if pil_image.mode in ('RGBA', 'LA'):
+                    background = Image.new('RGB', pil_image.size, (255, 255, 255))
+                    background.paste(pil_image, mask=pil_image.split()[-1])
+                    pil_image = background
+                elif pil_image.mode == 'P':
+                    pil_image = pil_image.convert('RGBA')
+                    background = Image.new('RGB', pil_image.size, (255, 255, 255))
+                    background.paste(pil_image, mask=pil_image.split()[-1])
+                    pil_image = background
+                elif pil_image.mode not in ('RGB', 'L'):
+                    pil_image = pil_image.convert('RGB')
+                
+                if pil_image.mode == 'L':
+                    pil_image = pil_image.convert('RGB')
+                
+                # 调整尺寸（仅当超过限制时）
+                if orig_width > max_width or orig_height > max_height:
+                    ratio = min(max_width / orig_width, max_height / orig_height)
+                    new_width = max(1, int(orig_width * ratio))
+                    new_height = max(1, int(orig_height * ratio))
+                    pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
+                
+                # 压缩为JPEG
+                output_buffer = BytesIO()
+                pil_image.save(
+                    output_buffer,
+                    format="JPEG",
+                    quality=settings["quality"],
+                    optimize=True,
+                    subsampling=settings.get("subsampling", 2)
                 )
+                compressed_data = output_buffer.getvalue()
                 
                 # 只有压缩后更小时才替换
                 if len(compressed_data) < len(image_data):

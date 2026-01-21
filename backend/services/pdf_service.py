@@ -3,7 +3,7 @@ import fitz  # PyMuPDF
 from pathlib import Path
 from typing import Optional
 from io import BytesIO
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .image_service import ImageCompressor, CompressionLevel, COMPRESSION_SETTINGS
 
@@ -33,6 +33,9 @@ class PDFCompressor:
             doc = fitz.open(input_path)
             settings = COMPRESSION_SETTINGS[level]
             
+            # 记录已处理的xref，避免重复处理
+            processed_xrefs = set()
+            
             # 遍历所有页面
             for page_num in range(len(doc)):
                 page = doc[page_num]
@@ -43,6 +46,11 @@ class PDFCompressor:
                 for img_info in image_list:
                     xref = img_info[0]  # 图片的xref引用
                     
+                    # 跳过已处理的图片
+                    if xref in processed_xrefs:
+                        continue
+                    processed_xrefs.add(xref)
+                    
                     try:
                         # 提取图片
                         base_image = doc.extract_image(xref)
@@ -50,39 +58,59 @@ class PDFCompressor:
                             continue
                         
                         image_bytes = base_image["image"]
+                        image_ext = base_image.get("ext", "jpeg")
                         
                         # 跳过太小的图片(可能是图标等)
-                        if len(image_bytes) < 2048:  # 小于2KB
+                        if len(image_bytes) < 4096:  # 小于4KB
                             continue
                         
-                        # 使用PIL打开并压缩图片
+                        # 使用PIL打开图片
                         try:
                             pil_image = Image.open(BytesIO(image_bytes))
                         except Exception:
                             continue
                         
+                        # 处理EXIF方向
+                        try:
+                            pil_image = ImageOps.exif_transpose(pil_image)
+                        except Exception:
+                            pass
+                        
+                        orig_width, orig_height = pil_image.size
+                        
+                        # 基础压缩：只压缩质量，不缩小尺寸
+                        if level == CompressionLevel.BASIC:
+                            max_width = max(orig_width, settings["max_width"])
+                            max_height = max(orig_height, settings["max_height"])
+                        else:
+                            max_width = settings["max_width"]
+                            max_height = settings["max_height"]
+                        
                         # 转换颜色模式
-                        if pil_image.mode in ('RGBA', 'LA', 'P'):
+                        if pil_image.mode in ('RGBA', 'LA'):
                             background = Image.new('RGB', pil_image.size, (255, 255, 255))
-                            if pil_image.mode == 'P':
-                                pil_image = pil_image.convert('RGBA')
-                            if pil_image.mode == 'RGBA':
-                                background.paste(pil_image, mask=pil_image.split()[-1])
-                            else:
-                                background.paste(pil_image)
+                            background.paste(pil_image, mask=pil_image.split()[-1])
                             pil_image = background
-                        elif pil_image.mode != 'RGB':
+                        elif pil_image.mode == 'P':
+                            pil_image = pil_image.convert('RGBA')
+                            background = Image.new('RGB', pil_image.size, (255, 255, 255))
+                            background.paste(pil_image, mask=pil_image.split()[-1])
+                            pil_image = background
+                        elif pil_image.mode == 'CMYK':
+                            pil_image = pil_image.convert('RGB')
+                        elif pil_image.mode not in ('RGB', 'L'):
                             pil_image = pil_image.convert('RGB')
                         
-                        # 调整尺寸
-                        orig_width, orig_height = pil_image.size
-                        max_width = settings["max_width"]
-                        max_height = settings["max_height"]
+                        # 灰度图保持灰度
+                        if pil_image.mode == 'L':
+                            pil_image = pil_image.convert('RGB')
                         
+                        # 调整尺寸（仅当超过限制时）
                         if orig_width > max_width or orig_height > max_height:
                             ratio = min(max_width / orig_width, max_height / orig_height)
-                            new_size = (int(orig_width * ratio), int(orig_height * ratio))
-                            pil_image = pil_image.resize(new_size, Image.LANCZOS)
+                            new_width = max(1, int(orig_width * ratio))
+                            new_height = max(1, int(orig_height * ratio))
+                            pil_image = pil_image.resize((new_width, new_height), Image.LANCZOS)
                         
                         # 压缩为JPEG
                         output_buffer = BytesIO()
@@ -96,20 +124,25 @@ class PDFCompressor:
                         compressed_data = output_buffer.getvalue()
                         
                         # 只有当压缩后更小时才替换
-                        if len(compressed_data) < len(image_bytes) * 0.95:  # 至少减少5%
-                            # 使用replace_image替换图片 (PyMuPDF >= 1.21.0)
+                        if len(compressed_data) < len(image_bytes):
+                            # 创建新的图片对象插入
                             try:
-                                page.replace_image(xref, stream=compressed_data)
-                            except AttributeError:
-                                # 旧版本PyMuPDF，使用其他方法
-                                doc._updateStream(xref, compressed_data)
+                                # 获取图片在页面中的位置信息
+                                for img_ref in page.get_images(full=True):
+                                    if img_ref[0] == xref:
+                                        # 使用 _updateStream 更新图片数据
+                                        doc._updateStream(xref, compressed_data)
+                                        break
+                            except Exception as e:
+                                print(f"替换图片失败: {e}")
+                                continue
                             
                     except Exception as e:
                         # 单个图片处理失败不影响整体
                         print(f"处理图片 {xref} 时出错: {e}")
                         continue
             
-            # 保存压缩后的PDF，使用更激进的压缩选项
+            # 保存压缩后的PDF
             doc.save(
                 output_path,
                 garbage=4,          # 最高级别垃圾回收
